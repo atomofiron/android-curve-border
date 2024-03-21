@@ -24,13 +24,14 @@ class ClipCanvasImageView : AppCompatImageView {
     }
 
     override fun draw(canvas: Canvas) {
-        canvas.clipPath(path)
+        if (cornerRadius > 0f) canvas.clipPath(path)
         super.draw(canvas)
     }
 
     fun setCornerRadius(value: Float) {
         cornerRadius = value
         updatePath()
+        invalidate()
     }
 
     private fun updatePath() = path.createRoundedCorners(rect, cornerRadius)
