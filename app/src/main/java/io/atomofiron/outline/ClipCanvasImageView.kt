@@ -7,7 +7,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import androidx.appcompat.widget.AppCompatImageView
 
-class WtfImageView : AppCompatImageView {
+class ClipCanvasImageView : AppCompatImageView {
 
     private val rect = RectF()
     private val path = Path()
