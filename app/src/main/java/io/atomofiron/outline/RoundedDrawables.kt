@@ -201,3 +201,17 @@ fun Path.appendRoundedCorners(bounds: RectF, radius: Float) {
         rLineTo(straightX * it.lineX, straightY * it.lineY)
     }
 }
+
+fun generateRoundedCornersPathData(bounds: RectF, radius: Float): String {
+    val offset = radius * RADIUS_MULTIPLIER
+    val straightX = bounds.width() - offset * 2
+    val straightY = bounds.height() - offset * 2
+    val builder = StringBuilder()
+    builder.append("M ${bounds.left} ${bounds.top + offset} ")
+    corners.forEach {
+        builder.append("c ${offset * it.dx1} ${offset * it.dy1} ${offset * it.dx2} ${offset * it.dy2} ${offset * it.dx} ${offset * it.dy} ")
+        builder.append("l ${straightX * it.lineX} ${straightY * it.lineY} ")
+    }
+    builder.append("z")
+    return builder.toString()
+}
