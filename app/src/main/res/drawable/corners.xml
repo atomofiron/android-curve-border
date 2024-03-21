@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1.6"
+    android:viewportHeight="1.6"
+    >
+    <group
+        android:translateX="0.1"
+        android:translateY="0.1"
+        >
+        <path
+            android:strokeColor="#0f0"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1 h 1 v -1"
+            />
+        <path
+            android:strokeColor="#f00"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.203 h 1.203 v -1.203"
+            />
+        <path
+            android:strokeColor="#ff0"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.2 h 1.2 v -1.2"
+            />
+        <path
+            android:strokeColor="#f0f"
+            android:strokeWidth="0.008"
+            android:pathData="M 0 1.5 h 1.5 v -1.5"
+            />
+        <path
+            android:strokeColor="#05f"
+            android:strokeWidth="0.004"
+            android:pathData="M 0 1.5 h 1.5 v -1.5"
+            />
+
+        <path
+            android:strokeColor="#0f0"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.5 v -0.5 a 1 1 0 0 1 1 -1 h 0.5"
+            />
+        <path
+            android:strokeColor="#f00"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.5 v -0.3 c 0 -0.2 0 -0.6 0.29 -0.91 c 0.29 -0.29 0.71 -0.29 0.91 -0.29 h 0.3"
+            />
+        <path
+            android:strokeColor="#f0f"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.5 c 0 -0.5 0 -0.9 0.29 -1.21 c 0.29 -0.29 0.71 -0.29 1.21 -0.29"
+            />
+        <path
+            android:strokeColor="#ff0"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.5 v -0.3 c 0 -0.72 0.28 -1.2 1.2 -1.2 h 0.3"
+            />
+        <path
+            android:strokeColor="#05f"
+            android:strokeWidth="0.002"
+            android:pathData="M 0 1.5 c 0 -1.22 0.28 -1.5 1.5 -1.5"
+            />
+    </group>
+</vector>
