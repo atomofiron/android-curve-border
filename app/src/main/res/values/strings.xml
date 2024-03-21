@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Outline</string>
+    <string name="app_name">Curve Border</string>
     <string name="android_version">Android: %d</string>
     <string name="legacy_mode">Legacy mode:</string>
     <string name="clip_canvas">Clip canvas:</string>
