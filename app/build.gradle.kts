@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.atomofiron.outline"
+    namespace = "demo.atomofiron.outline"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "io.atomofiron.outline"
+        applicationId = "demo.atomofiron.outline"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

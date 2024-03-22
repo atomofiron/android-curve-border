@@ -1,4 +1,4 @@
-package io.atomofiron.outline
+package demo.atomofiron.outline
 
 import android.graphics.Color
 import android.os.Build.VERSION.SDK_INT
@@ -9,7 +9,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat.Type
 import androidx.core.view.updatePadding
-import io.atomofiron.outline.databinding.ActivityMainBinding
+import demo.atomofiron.outline.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
