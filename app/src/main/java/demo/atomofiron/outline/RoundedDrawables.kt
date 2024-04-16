@@ -60,11 +60,11 @@ sealed interface ColorType {
         val state: StateType = StateType.Undefined,
     ) : ColorType
     data class Attr(
-        @AttrRes val colorId: Int,
+        @AttrRes val colorAttr: Int,
         val state: StateType = StateType.Undefined,
     ) : ColorType
     data class Value(
-        val color: Int,
+        @ColorInt val color: Int,
         val state: StateType = StateType.Undefined,
     ) : ColorType
 }
@@ -99,23 +99,78 @@ sealed interface ShapeStyle {
     }
 }
 
-sealed interface Shape {
-    data class Rect(val radius: DimensionType) : Shape {
-        constructor(@DimenRes radius: Int) : this(DimensionType.Res(radius))
-        constructor(radius: Float) : this(DimensionType.Value(radius))
+sealed interface RadiusType {
+    companion object {
+        operator fun invoke(radius: Float) = Single(radius)
+        operator fun invoke(@DimenRes dimenId: Int) = Single(dimenId)
 
-        companion object : Shape by Rect(DimensionType.Value(0))
+        fun left(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(radius))
+        fun top(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(radius))
+        fun right(radius: Float) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun bottom(radius: Float) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+
+        fun left(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(radius))
+        fun top(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(radius))
+        fun right(@DimenRes radius: Int) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun bottom(@DimenRes radius: Int) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
     }
-    data class Circle(val param: Param, val value: DimensionType) : Shape {
+
+    data class Single(val value: DimensionType) : RadiusType {
+        constructor(value: Float) : this(DimensionType.Value(value))
+        constructor(@DimenRes dimenId: Int) : this(DimensionType.Res(dimenId))
+    }
+
+    data class Radii(
+        val topLeft: DimensionType,
+        val topRight: DimensionType,
+        val bottomRight: DimensionType,
+        val bottomLeft: DimensionType,
+    ) : RadiusType {
         companion object {
-            fun radius(@DimenRes radius: Int) = Circle(Param.Radius, DimensionType.Res(radius))
-            fun radius(radius: Float) = Circle(Param.Radius, DimensionType.Value(radius))
-            fun diameter(@DimenRes radius: Int) = Circle(Param.Diameter, DimensionType.Res(radius))
-            fun diameter(radius: Float) = Circle(Param.Diameter, DimensionType.Value(radius))
+            val Zero = Radii(DimensionType.Zero, DimensionType.Zero, DimensionType.Zero, DimensionType.Zero)
+
+            operator fun invoke() = Zero
         }
-        enum class Param {
-            Radius, Diameter
+        constructor(
+            topLeft: Float,
+            topRight: Float,
+            bottomRight: Float,
+            bottomLeft: Float,
+        ) : this(DimensionType.Value(topLeft), DimensionType.Value(topRight), DimensionType.Value(bottomRight), DimensionType.Value(bottomLeft))
+
+        constructor(
+            @DimenRes topLeft: Int,
+            @DimenRes topRight: Int,
+            @DimenRes bottomRight: Int,
+            @DimenRes bottomLeft: Int,
+        ) : this(DimensionType.Res(topLeft), DimensionType.Res(topRight), DimensionType.Res(bottomRight), DimensionType.Res(bottomLeft))
+    }
+}
+
+sealed interface Shape {
+    data class Rect(val param: RadiusType) : Shape {
+        constructor(radius: Float) : this(RadiusType(radius))
+        constructor(@DimenRes radius: Int) : this(RadiusType(radius))
+
+        companion object {
+            val Square = Rect(RadiusType.Radii.Zero)
+
+            operator fun invoke() = Square
+
+            fun left(radius: Float) = RadiusType.left(radius)
+            fun top(radius: Float) = RadiusType.top(radius)
+            fun right(radius: Float) = RadiusType.right(radius)
+            fun bottom(radius: Float) = RadiusType.bottom(radius)
+
+            fun left(@DimenRes radius: Int) = RadiusType.left(radius)
+            fun top(@DimenRes radius: Int) = RadiusType.top(radius)
+            fun right(@DimenRes radius: Int) = RadiusType.right(radius)
+            fun bottom(@DimenRes radius: Int) = RadiusType.bottom(radius)
         }
+    }
+    data class Circle(val radius: DimensionType) : Shape {
+        constructor(radius: Float) : this(DimensionType.Value(radius))
+        constructor(@DimenRes radius: Int) : this(DimensionType.Res(radius))
     }
     data object Borderless : Shape
 }
@@ -134,31 +189,31 @@ sealed interface DrawableType {
 
         operator fun invoke(
             color: ColorType,
-            shape: Shape = Shape.Rect,
+            shape: Shape = Shape.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(color, shape, style, state)
 
         fun color(
             @ColorInt color: Int,
-            shape: Shape = Shape.Rect,
+            shape: Shape = Shape.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(ColorType.Value(color), shape, style, state)
 
         fun colorRes(
             @ColorRes color: Int,
-            shape: Shape = Shape.Rect,
+            shape: Shape = Shape.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
-        ) = Colored(ColorType.Value(color), shape, style, state)
+        ) = Colored(ColorType.Res(color), shape, style, state)
 
         fun colorAttr(
-            @AttrRes color: Int,
-            shape: Shape = Shape.Rect,
+            @AttrRes colorAttr: Int,
+            shape: Shape = Shape.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
-        ) = Colored(ColorType.Value(color), shape, style, state)
+        ) = Colored(ColorType.Attr(colorAttr), shape, style, state)
     }
     data class Res(
         @DrawableRes val drawableId: Int,
@@ -170,31 +225,53 @@ sealed interface DrawableType {
     ) : DrawableType
     data class Colored(
         val color: ColorType,
-        val shape: Shape = Shape.Rect,
+        val shape: Shape = Shape.Rect(),
         val style: ShapeStyle = ShapeStyle.Fill,
         val state: StateType = StateType.Undefined,
     ) : DrawableType
-    data class Ripple(
-        val color: ColorType = ColorType.Res(R.color.abc_color_highlight_material),
-        val shape: Shape = Shape.Rect,
-        val state: StateType = StateType.Undefined,
-    ) : DrawableType
 }
 
-fun View.background(ripple: DrawableType.Ripple? = null, vararg layers: DrawableType) {
+data class RippleType(
+    val color: ColorType = ColorType.Res(R.color.abc_color_highlight_material),
+    val shape: Shape = Shape.Rect(),
+    val state: StateType = StateType.Undefined,
+) {
+    companion object {
+        fun color(
+            @ColorInt color: Int,
+            shape: Shape = Shape.Rect(),
+            state: StateType = StateType.Undefined,
+        ) = RippleType(ColorType.Value(color), shape, state)
+
+        fun colorRes(
+            @ColorRes colorId: Int,
+            shape: Shape = Shape.Rect(),
+            state: StateType = StateType.Undefined,
+        ) = RippleType(ColorType.Res(colorId), shape, state)
+
+        fun colorAttr(
+            @AttrRes colorAttr: Int,
+            shape: Shape = Shape.Rect(),
+            state: StateType = StateType.Undefined,
+        ) = RippleType(ColorType.Attr(colorAttr), shape, state)
+    }
+}
+
+fun View.background(ripple: RippleType? = null, vararg layers: DrawableType) {
     background = context.drawable(ripple, *layers)
 }
 
-fun View.foreground(ripple: DrawableType.Ripple? = null, vararg layers: DrawableType) {
+fun View.foreground(ripple: RippleType? = null, vararg layers: DrawableType) {
     foreground = context.drawable(ripple, *layers)
 }
 
 fun Context.drawable(
-    ripple: DrawableType.Ripple? = null,
+    ripple: RippleType? = null,
     vararg layers: DrawableType,
 ): Drawable {
     TODO("Not yet implemented")
 }
+
 
 
 
