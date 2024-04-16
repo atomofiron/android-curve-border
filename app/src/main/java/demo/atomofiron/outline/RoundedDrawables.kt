@@ -1,11 +1,15 @@
 package demo.atomofiron.outline
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
+import android.graphics.Paint.Cap
+import android.graphics.Paint.Join
 import android.graphics.Paint.Style
 import android.graphics.Path
 import android.graphics.PixelFormat
@@ -18,16 +22,180 @@ import android.os.Build.VERSION_CODES.R as AndroidR
 import android.os.Build.VERSION_CODES.TIRAMISU as AndroidT
 import android.view.View
 import android.view.ViewOutlineProvider
+import androidx.annotation.AttrRes
+import androidx.annotation.ColorInt
+import androidx.annotation.ColorRes
+import androidx.annotation.DimenRes
+import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
+import androidx.appcompat.R
 import androidx.core.content.ContextCompat
 
-// todo use ColorStateList
 
 val isCurveUnavailable = SDK_INT < AndroidR
 val isCurveWorks = SDK_INT >= AndroidT
 var forceLegacy = false
 val legacyMode get() = forceLegacy || isCurveUnavailable
 //val legacyMode get() = SDK_INT < AndroidT
+
+
+data class StateType(
+    val enabled: Boolean? = null,
+    val checked: Boolean? = null,
+    val activated: Boolean? = null,
+    val selected: Boolean? = null,
+) {
+    companion object {
+        val Undefined = StateType()
+    }
+}
+
+sealed interface ColorType {
+    companion object {
+        fun transparent(state: StateType = StateType.Undefined) = Value(Color.TRANSPARENT, state)
+        fun mask(state: StateType = StateType.Undefined) = Value(Color.BLACK, state)
+    }
+    data class Res(
+        @ColorRes val colorId: Int,
+        val state: StateType = StateType.Undefined,
+    ) : ColorType
+    data class Attr(
+        @AttrRes val colorId: Int,
+        val state: StateType = StateType.Undefined,
+    ) : ColorType
+    data class Value(
+        val color: Int,
+        val state: StateType = StateType.Undefined,
+    ) : ColorType
+}
+
+sealed interface DimensionType {
+    companion object {
+        val Zero = Value(0)
+    }
+    data class Res(@DimenRes val dimenId: Int) : DimensionType
+    data class Value(val value: Float) : DimensionType {
+        constructor(value: Int) : this(value.toFloat())
+    }
+}
+
+sealed interface ShapeStyle {
+    data object Fill : ShapeStyle
+    data class Stroke(
+        val width: DimensionType,
+        val cap: Cap,
+        val join: Join,
+    ) : ShapeStyle {
+        constructor(
+            @DimenRes width: Int,
+            cap: Cap = Cap.SQUARE,
+            join: Join = Join.MITER,
+        ) : this(DimensionType.Res(width), cap, join)
+        constructor(
+            width: Float = 1f,
+            cap: Cap = Cap.SQUARE,
+            join: Join = Join.MITER,
+        ) : this(DimensionType.Value(width), cap, join)
+    }
+}
+
+sealed interface Shape {
+    data class Rect(val radius: DimensionType) : Shape {
+        constructor(@DimenRes radius: Int) : this(DimensionType.Res(radius))
+        constructor(radius: Float) : this(DimensionType.Value(radius))
+
+        companion object : Shape by Rect(DimensionType.Value(0))
+    }
+    data class Circle(val param: Param, val value: DimensionType) : Shape {
+        companion object {
+            fun radius(@DimenRes radius: Int) = Circle(Param.Radius, DimensionType.Res(radius))
+            fun radius(radius: Float) = Circle(Param.Radius, DimensionType.Value(radius))
+            fun diameter(@DimenRes radius: Int) = Circle(Param.Diameter, DimensionType.Res(radius))
+            fun diameter(radius: Float) = Circle(Param.Diameter, DimensionType.Value(radius))
+        }
+        enum class Param {
+            Radius, Diameter
+        }
+    }
+    data object Borderless : Shape
+}
+
+sealed interface DrawableType {
+    companion object {
+        operator fun invoke(
+            @DrawableRes drawableId: Int,
+            state: StateType = StateType.Undefined,
+        ) = Res(drawableId, state)
+
+        operator fun invoke(
+            drawable: Drawable,
+            state: StateType = StateType.Undefined,
+        ) = Value(drawable, state)
+
+        operator fun invoke(
+            color: ColorType,
+            shape: Shape = Shape.Rect,
+            style: ShapeStyle = ShapeStyle.Fill,
+            state: StateType = StateType.Undefined,
+        ) = Colored(color, shape, style, state)
+
+        fun color(
+            @ColorInt color: Int,
+            shape: Shape = Shape.Rect,
+            style: ShapeStyle = ShapeStyle.Fill,
+            state: StateType = StateType.Undefined,
+        ) = Colored(ColorType.Value(color), shape, style, state)
+
+        fun colorRes(
+            @ColorRes color: Int,
+            shape: Shape = Shape.Rect,
+            style: ShapeStyle = ShapeStyle.Fill,
+            state: StateType = StateType.Undefined,
+        ) = Colored(ColorType.Value(color), shape, style, state)
+
+        fun colorAttr(
+            @AttrRes color: Int,
+            shape: Shape = Shape.Rect,
+            style: ShapeStyle = ShapeStyle.Fill,
+            state: StateType = StateType.Undefined,
+        ) = Colored(ColorType.Value(color), shape, style, state)
+    }
+    data class Res(
+        @DrawableRes val drawableId: Int,
+        val state: StateType = StateType.Undefined,
+    ) : DrawableType
+    data class Value(
+        val drawable: Drawable,
+        val state: StateType = StateType.Undefined,
+    ) : DrawableType
+    data class Colored(
+        val color: ColorType,
+        val shape: Shape = Shape.Rect,
+        val style: ShapeStyle = ShapeStyle.Fill,
+        val state: StateType = StateType.Undefined,
+    ) : DrawableType
+    data class Ripple(
+        val color: ColorType = ColorType.Res(R.color.abc_color_highlight_material),
+        val shape: Shape = Shape.Rect,
+        val state: StateType = StateType.Undefined,
+    ) : DrawableType
+}
+
+fun View.background(ripple: DrawableType.Ripple? = null, vararg layers: DrawableType) {
+    background = context.drawable(ripple, *layers)
+}
+
+fun View.foreground(ripple: DrawableType.Ripple? = null, vararg layers: DrawableType) {
+    foreground = context.drawable(ripple, *layers)
+}
+
+fun Context.drawable(
+    ripple: DrawableType.Ripple? = null,
+    vararg layers: DrawableType,
+): Drawable {
+    TODO("Not yet implemented")
+}
+
 
 
 fun <V : View> V.rippleForeground(cornerRadius: Float): V = ripple(cornerRadius, toForeground = true)
@@ -40,7 +208,7 @@ private fun <V : View> V.ripple(cornerRadius: Float, contentColor: Int = Color.T
 }
 
 private fun <V : View> V.ripple(cornerRadius: Float, content: Drawable?, toForeground: Boolean): V {
-    val rippleColor = androidx.appcompat.R.color.abc_color_highlight_material
+    val rippleColor = R.color.abc_color_highlight_material
             .let { ContextCompat.getColor(context, it) }
             .let { ColorStateList.valueOf(it) }
     val mask = RoundCornersDrawable.fill(Color.BLACK, cornerRadius)
@@ -68,6 +236,7 @@ fun <V : View> V.setRoundedBorder(
     return this
 }
 
+@SuppressLint("NewApi") // the check is in legacyMode
 fun <V : View> V.clipToOutline(cornerRadius: Float): V {
     clipToOutline = true
     outlineProvider = when {
@@ -121,6 +290,7 @@ class RoundCornersDrawable private constructor(
         strokeWidth = this@RoundCornersDrawable.strokeWidth * 2
     }
 
+    @SuppressLint("NewApi") // the check is in legacyMode
     override fun getOutline(outline: Outline) = when {
         legacyMode -> outline.setRoundRect(bounds, radius)
         else -> outline.setPath(path)
