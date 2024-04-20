@@ -257,16 +257,29 @@ data class RippleType(
     }
 }
 
-fun View.background(ripple: RippleType? = null, vararg layers: DrawableType) {
-    background = context.drawable(ripple, *layers)
+fun View.background(ripple: RippleType? = null, clipToOutline: Boolean = true, vararg layers: DrawableType) {
+    background = context.drawable(ripple, layers = layers)
+    setClipToOutline(clipToOutline)
 }
 
-fun View.foreground(ripple: RippleType? = null, vararg layers: DrawableType) {
-    foreground = context.drawable(ripple, *layers)
+fun View.foreground(ripple: RippleType? = null, clipToOutline: Boolean = true, vararg layers: DrawableType) {
+    val drawable = context.drawable(ripple, layers = layers)
+    foreground = drawable
+    if (clipToOutline) {
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                if (foreground === drawable) {
+                    drawable.getOutline(outline)
+                }
+            }
+        }
+    }
+    setClipToOutline(clipToOutline)
 }
 
 fun Context.drawable(
     ripple: RippleType? = null,
+    clippingShape: Shape? = null,
     vararg layers: DrawableType,
 ): Drawable {
     TODO("Not yet implemented")
