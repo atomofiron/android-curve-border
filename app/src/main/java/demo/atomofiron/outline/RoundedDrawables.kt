@@ -28,7 +28,7 @@ import androidx.annotation.ColorRes
 import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
-import androidx.appcompat.R
+import androidx.appcompat.R as CompatR
 import androidx.core.content.ContextCompat
 
 
@@ -52,6 +52,8 @@ data class StateType(
 
 sealed interface ColorType {
     companion object {
+        val RippleDefault = Res(CompatR.color.abc_color_highlight_material) // androidx.core.R?
+
         fun transparent(state: StateType = StateType.Undefined) = Value(Color.TRANSPARENT, state)
         fun mask(state: StateType = StateType.Undefined) = Value(Color.BLACK, state)
     }
@@ -231,56 +233,52 @@ sealed interface DrawableType {
     ) : DrawableType
 }
 
-data class RippleType(
-    val color: ColorType = ColorType.Res(R.color.abc_color_highlight_material),
-    val shape: Shape = Shape.Rect(),
-    val state: StateType = StateType.Undefined,
+fun View.setBackground(
+    rippleColor: ColorType? = null,
+    clippingShape: Shape? = null,
+    clipToOutline: Boolean = clippingShape != null,
+    vararg layers: DrawableType = emptyArray(),
 ) {
-    companion object {
-        fun color(
-            @ColorInt color: Int,
-            shape: Shape = Shape.Rect(),
-            state: StateType = StateType.Undefined,
-        ) = RippleType(ColorType.Value(color), shape, state)
-
-        fun colorRes(
-            @ColorRes colorId: Int,
-            shape: Shape = Shape.Rect(),
-            state: StateType = StateType.Undefined,
-        ) = RippleType(ColorType.Res(colorId), shape, state)
-
-        fun colorAttr(
-            @AttrRes colorAttr: Int,
-            shape: Shape = Shape.Rect(),
-            state: StateType = StateType.Undefined,
-        ) = RippleType(ColorType.Attr(colorAttr), shape, state)
+    background = context.drawable(rippleColor, clippingShape, layers = layers)
+    if (clipToOutline) {
+        clipByBackground()
     }
 }
 
-fun View.background(ripple: RippleType? = null, clipToOutline: Boolean = true, vararg layers: DrawableType) {
-    background = context.drawable(ripple, layers = layers)
-    setClipToOutline(clipToOutline)
+fun View.setForeground(
+    rippleColor: ColorType? = null,
+    clippingShape: Shape? = null,
+    clipToOutline: Boolean = clippingShape != null,
+    vararg layers: DrawableType = emptyArray(),
+) {
+    foreground = context.drawable(rippleColor, clippingShape, layers = layers)
+    if (clipToOutline) {
+        clipByForeground()
+    }
 }
 
-fun View.foreground(ripple: RippleType? = null, clipToOutline: Boolean = true, vararg layers: DrawableType) {
-    val drawable = context.drawable(ripple, layers = layers)
-    foreground = drawable
-    if (clipToOutline) {
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, outline: Outline) {
-                if (foreground === drawable) {
-                    drawable.getOutline(outline)
-                }
-            }
+fun View.clipByBackground() {
+    outlineProvider = object : ViewOutlineProvider() {
+        override fun getOutline(view: View, outline: Outline) {
+            background?.getOutline(outline)
         }
     }
-    setClipToOutline(clipToOutline)
+    clipToOutline = true
+}
+
+fun View.clipByForeground() {
+    outlineProvider = object : ViewOutlineProvider() {
+        override fun getOutline(view: View, outline: Outline) {
+            foreground?.getOutline(outline)
+        }
+    }
+    clipToOutline = true
 }
 
 fun Context.drawable(
-    ripple: RippleType? = null,
-    clippingShape: Shape? = null,
-    vararg layers: DrawableType,
+    rippleColor: ColorType? = null,
+    rippleShape: Shape? = null,
+    vararg layers: DrawableType = emptyArray(),
 ): Drawable {
     TODO("Not yet implemented")
 }
@@ -298,7 +296,7 @@ private fun <V : View> V.ripple(cornerRadius: Float, contentColor: Int = Color.T
 }
 
 private fun <V : View> V.ripple(cornerRadius: Float, content: Drawable?, toForeground: Boolean): V {
-    val rippleColor = R.color.abc_color_highlight_material
+    val rippleColor = ColorType.RippleDefault.colorId
             .let { ContextCompat.getColor(context, it) }
             .let { ColorStateList.valueOf(it) }
     val mask = RoundCornersDrawable.fill(Color.BLACK, cornerRadius)
