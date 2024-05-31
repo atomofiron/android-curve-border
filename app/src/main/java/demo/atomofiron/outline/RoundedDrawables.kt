@@ -8,13 +8,12 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
-import android.graphics.Paint.Cap
-import android.graphics.Paint.Join
 import android.graphics.Paint.Style
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Build.VERSION.SDK_INT
@@ -81,23 +80,14 @@ sealed interface DimensionType {
     }
 }
 
-sealed interface ShapeStyle {
-    data object Fill : ShapeStyle
-    data class Stroke(
-        val width: DimensionType,
-        val cap: Cap,
-        val join: Join,
-    ) : ShapeStyle {
-        constructor(
-            @DimenRes width: Int,
-            cap: Cap = Cap.SQUARE,
-            join: Join = Join.MITER,
-        ) : this(DimensionType.Res(width), cap, join)
-        constructor(
-            width: Float = 1f,
-            cap: Cap = Cap.SQUARE,
-            join: Join = Join.MITER,
-        ) : this(DimensionType.Value(width), cap, join)
+sealed class ShapeStyle(
+    val paintStyle: Style,
+    val strokeWidth: DimensionType,
+) {
+    data object Fill : ShapeStyle(Style.FILL, strokeWidth = DimensionType.Zero)
+    data class Stroke(val width: DimensionType) : ShapeStyle(Style.STROKE, width) {
+        constructor(@DimenRes width: Int) : this(DimensionType.Res(width))
+        constructor(width: Float = 1f) : this(DimensionType.Value(width))
     }
 }
 
@@ -149,8 +139,8 @@ sealed interface RadiusType {
     }
 }
 
-sealed interface Shape {
-    data class Rect(val param: RadiusType) : Shape {
+sealed interface ShapeType {
+    data class Rect(val param: RadiusType) : ShapeType {
         constructor(radius: Float) : this(RadiusType(radius))
         constructor(@DimenRes radius: Int) : this(RadiusType(radius))
 
@@ -158,23 +148,13 @@ sealed interface Shape {
             val Square = Rect(RadiusType.Radii.Zero)
 
             operator fun invoke() = Square
-
-            fun left(radius: Float) = RadiusType.left(radius)
-            fun top(radius: Float) = RadiusType.top(radius)
-            fun right(radius: Float) = RadiusType.right(radius)
-            fun bottom(radius: Float) = RadiusType.bottom(radius)
-
-            fun left(@DimenRes radius: Int) = RadiusType.left(radius)
-            fun top(@DimenRes radius: Int) = RadiusType.top(radius)
-            fun right(@DimenRes radius: Int) = RadiusType.right(radius)
-            fun bottom(@DimenRes radius: Int) = RadiusType.bottom(radius)
         }
     }
-    data class Circle(val radius: DimensionType) : Shape {
+    data class Circle(val radius: DimensionType) : ShapeType {
         constructor(radius: Float) : this(DimensionType.Value(radius))
         constructor(@DimenRes radius: Int) : this(DimensionType.Res(radius))
     }
-    data object Borderless : Shape
+    data object Borderless : ShapeType
 }
 
 sealed interface DrawableType {
@@ -191,28 +171,28 @@ sealed interface DrawableType {
 
         operator fun invoke(
             color: ColorType,
-            shape: Shape = Shape.Rect(),
+            shape: ShapeType = ShapeType.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(color, shape, style, state)
 
         fun color(
             @ColorInt color: Int,
-            shape: Shape = Shape.Rect(),
+            shape: ShapeType = ShapeType.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(ColorType.Value(color), shape, style, state)
 
         fun colorRes(
             @ColorRes color: Int,
-            shape: Shape = Shape.Rect(),
+            shape: ShapeType = ShapeType.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(ColorType.Res(color), shape, style, state)
 
         fun colorAttr(
             @AttrRes colorAttr: Int,
-            shape: Shape = Shape.Rect(),
+            shape: ShapeType = ShapeType.Rect(),
             style: ShapeStyle = ShapeStyle.Fill,
             state: StateType = StateType.Undefined,
         ) = Colored(ColorType.Attr(colorAttr), shape, style, state)
@@ -227,7 +207,7 @@ sealed interface DrawableType {
     ) : DrawableType
     data class Colored(
         val color: ColorType,
-        val shape: Shape = Shape.Rect(),
+        val shape: ShapeType = ShapeType.Rect(),
         val style: ShapeStyle = ShapeStyle.Fill,
         val state: StateType = StateType.Undefined,
     ) : DrawableType
@@ -235,7 +215,7 @@ sealed interface DrawableType {
 
 fun View.setBackground(
     rippleColor: ColorType? = null,
-    clippingShape: Shape? = null,
+    clippingShape: ShapeType? = null,
     clipToOutline: Boolean = clippingShape != null,
     vararg layers: DrawableType = emptyArray(),
 ) {
@@ -247,7 +227,7 @@ fun View.setBackground(
 
 fun View.setForeground(
     rippleColor: ColorType? = null,
-    clippingShape: Shape? = null,
+    clippingShape: ShapeType? = null,
     clipToOutline: Boolean = clippingShape != null,
     vararg layers: DrawableType = emptyArray(),
 ) {
@@ -277,13 +257,60 @@ fun View.clipByForeground() {
 
 fun Context.drawable(
     rippleColor: ColorType? = null,
-    rippleShape: Shape? = null,
+    rippleShape: ShapeType? = null,
     vararg layers: DrawableType = emptyArray(),
 ): Drawable {
-    TODO("Not yet implemented")
+    val rippleType = when {
+        rippleColor != null -> rippleColor to ShapeType.Rect.Square
+        rippleShape != null -> ColorType.RippleDefault to rippleShape
+        else -> null
+    }
+    val ripple = rippleType?.let { (color, shape) ->
+        resolve(color) to RoundCornersDrawable(this, Color.TRANSPARENT, ShapeStyle.Fill, shape)
+    }
+    val list = when (ripple) {
+        null -> LayerDrawable(arrayOf())
+        else -> RippleDrawable(ColorStateList.valueOf(ripple.first), null, ripple.second)
+    }
+    layers.forEach {
+        list.addLayer(resolve(it))
+    }
+    return list
 }
 
+private fun Context.resolve(type: DimensionType): Float = when (type) {
+    is DimensionType.Value -> type.value
+    is DimensionType.Res -> resources.getDimension(type.dimenId)
+}
 
+private fun Context.resolve(type: ColorType): Int = when (type) {
+    is ColorType.Value -> type.color
+    is ColorType.Res -> ContextCompat.getColor(this, type.colorId)
+    is ColorType.Attr -> getColorByAttr(type.colorAttr)
+}
+
+private fun Context.resolve(type: DrawableType): Drawable = when (type) {
+    is DrawableType.Value -> type.drawable
+    is DrawableType.Res -> ContextCompat.getDrawable(this, type.drawableId)!!
+    is DrawableType.Colored -> RoundCornersDrawable(this, resolve(type.color), type.style, type.shape)
+}
+
+fun Context.getColorByAttr(@AttrRes attr: Int): Int = ContextCompat.getColor(this, findResIdByAttr(attr))
+
+fun Context.findResIdByAttr(@AttrRes attr: Int): Int = findResIdsByAttr(attr)[0]
+
+fun Context.findResIdsByAttr(@AttrRes vararg attrs: Int): IntArray {
+    @SuppressLint("ResourceType")
+    val array = obtainStyledAttributes(attrs)
+
+    val values = IntArray(attrs.size)
+    for (i in attrs.indices) {
+        values[i] = array.getResourceId(i, 0)
+    }
+    array.recycle()
+
+    return values
+}
 
 
 fun <V : View> V.rippleForeground(cornerRadius: Float): V = ripple(cornerRadius, toForeground = true)
@@ -291,7 +318,7 @@ fun <V : View> V.rippleForeground(cornerRadius: Float): V = ripple(cornerRadius,
 fun <V : View> V.rippleBackground(cornerRadius: Float, backgroundColor: Int = Color.TRANSPARENT): V = ripple(cornerRadius, backgroundColor, toForeground = false)
 
 private fun <V : View> V.ripple(cornerRadius: Float, contentColor: Int = Color.TRANSPARENT, toForeground: Boolean): V {
-    val content = if (contentColor != 0) RoundCornersDrawable.fill(contentColor, cornerRadius) else null
+    val content = if (contentColor != 0) RoundCornersDrawable(context, contentColor, ShapeStyle.Fill, ShapeType.Rect(cornerRadius)) else null
     return ripple(cornerRadius, content, toForeground)
 }
 
@@ -299,7 +326,7 @@ private fun <V : View> V.ripple(cornerRadius: Float, content: Drawable?, toForeg
     val rippleColor = ColorType.RippleDefault.colorId
             .let { ContextCompat.getColor(context, it) }
             .let { ColorStateList.valueOf(it) }
-    val mask = RoundCornersDrawable.fill(Color.BLACK, cornerRadius)
+    val mask = RoundCornersDrawable(context, Color.BLACK, ShapeStyle.Fill, ShapeType.Rect(cornerRadius))
     clipToOutline = true
     RippleDrawable(rippleColor, content, mask).let {
         if (toForeground) {
@@ -317,7 +344,7 @@ fun <V : View> V.setRoundedBorder(
     cornerRadius: Float,
     borderWidth: Float = resources.displayMetrics.density,
 ): V {
-    val drawable = RoundCornersDrawable.stroke(borderColor, cornerRadius, borderWidth)
+    val drawable = RoundCornersDrawable(context, borderColor, ShapeStyle.Stroke(borderWidth), ShapeType.Rect(cornerRadius))
     foreground = drawable
     outlineProvider = drawable.getOutlineProvider()
     clipToOutline = true
@@ -358,25 +385,38 @@ private class CubicCornersOutlineProvider(private val radius: Float) : ViewOutli
     }
 }
 
+fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
+    is ShapeType.Borderless -> ShapeValueType.Borderless
+    is ShapeType.Circle -> ShapeValueType.Circle(resolve(type.radius))
+    is ShapeType.Rect -> when (type.param) {
+        is RadiusType.Single -> ShapeValueType.Rect(resolve(type.param.value))
+        is RadiusType.Radii -> ShapeValueType.Rect(
+            resolve(type.param.topLeft),
+            resolve(type.param.topRight),
+            resolve(type.param.bottomRight),
+            resolve(type.param.bottomLeft),
+        )
+    }
+}
+
 class RoundCornersDrawable private constructor(
-    private val color: Int,
-    private val radius: Float,
-    private val style: Style,
-    private val strokeWidth: Float = 0f,
+    private val type: ShapeValueType,
+    private val paint: Paint,
 ) : Drawable() {
     companion object {
-        fun fill(color: Int, radius: Float) = RoundCornersDrawable(color, radius, Style.FILL, strokeWidth = 0f)
-        fun stroke(color: Int, radius: Float, strokeWidth: Float) = RoundCornersDrawable(color, radius, Style.STROKE, strokeWidth)
+        operator fun invoke(context: Context, color: Int, style: ShapeStyle, type: ShapeType): RoundCornersDrawable {
+            val paint = Paint()
+            paint.isAntiAlias = true
+            paint.color = color
+            paint.style = style.paintStyle
+            // clip the line in the middle during drawing
+            paint.strokeWidth = context.resolve(style.strokeWidth) * 2
+            return RoundCornersDrawable(context.resolve(type), paint)
+        }
     }
+
     private val path = Path()
     private val rect = RectF()
-    private val paint = Paint().apply {
-        isAntiAlias = true
-        color = this@RoundCornersDrawable.color
-        style = this@RoundCornersDrawable.style
-        // clip the line in the middle during drawing
-        strokeWidth = this@RoundCornersDrawable.strokeWidth * 2
-    }
 
     @SuppressLint("NewApi") // the check is in legacyMode
     override fun getOutline(outline: Outline) = when {
@@ -414,6 +454,20 @@ class RoundCornersDrawable private constructor(
 
     fun getOutlineProvider() = (this as Drawable).getOutlineProvider()
 }
+
+sealed interface ShapeValueType {
+    data object Borderless : ShapeValueType
+    data class Circle(val radius: Float) : ShapeValueType
+    data class Rect(
+        val topLeft: Float,
+        val topRight: Float,
+        val bottomRight: Float,
+        val bottomLeft: Float,
+    ) : ShapeValueType {
+        constructor(radius: Float) : this(radius, radius, radius, radius)
+    }
+}
+
 
 
 private const val RADIUS_MULTIPLIER = 1.2f

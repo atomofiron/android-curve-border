@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
             true -> Color.parseColor("#ff008800")
             false -> Color.parseColor("#ff00aa00")
         }
-        val stroke = RoundCornersDrawable.stroke(color, strokeRadius, strokeWidth)
+        val stroke = RoundCornersDrawable(this@MainActivity, color, ShapeStyle.Stroke(strokeWidth), ShapeType.Rect(strokeRadius))
         frame.clipToOutline = true
         //frame.background = stroke
         frame.foreground = stroke
