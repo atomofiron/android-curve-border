@@ -1,6 +1,8 @@
 package demo.atomofiron.outline
 
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.RippleDrawable
 import android.os.Build.VERSION.SDK_INT
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -42,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         legacy.isChecked = legacyMode
         legacy.isEnabled = !isCurveUnavailable
         clipCanvas.isChecked = isCurveUnavailable
-        clipCanvas.isEnabled = !isCurveWorks
+        clipCanvas.isEnabled = !isCurveWork
         update()
         legacy.setOnCheckedChangeListener { _, _ -> update() }
         clipCanvas.setOnCheckedChangeListener { _, _ -> update() }
@@ -61,13 +63,13 @@ class MainActivity : AppCompatActivity() {
             true -> Color.parseColor("#ff008800")
             false -> Color.parseColor("#ff00aa00")
         }
-        val stroke = RoundCornersDrawable(this@MainActivity, color, ShapeStyle.Stroke(strokeWidth), ShapeType.Rect(strokeRadius))
+        val stroke = RoundedDrawable(this@MainActivity, ColorType.Value(color), ShapeStyle.Stroke(strokeWidth), ShapeType.Rect(strokeRadius))
         frame.clipToOutline = true
         //frame.background = stroke
         frame.foreground = stroke
         frame.outlineProvider = stroke.getOutlineProvider()
 
-        if (isCurveWorks) {
+        if (isCurveWork) {
         } else if (legacy.isChecked && clipCanvas.isEnabled) {
             clipCanvas.isEnabled = false
             clipCanvasWasChecked = clipCanvas.isChecked
