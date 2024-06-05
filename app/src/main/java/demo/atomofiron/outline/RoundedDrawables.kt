@@ -3,6 +3,8 @@ package demo.atomofiron.outline
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.BlendMode
+import android.graphics.BlendModeColorFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -11,15 +13,16 @@ import android.graphics.Paint
 import android.graphics.Paint.Style
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES.Q
 import android.os.Build.VERSION_CODES.TIRAMISU
-import android.os.Build.VERSION_CODES.R as AndroidR
-import android.os.Build.VERSION_CODES.TIRAMISU as AndroidT
 import android.view.View
 import android.view.ViewOutlineProvider
 import androidx.annotation.AttrRes
@@ -28,8 +31,10 @@ import androidx.annotation.ColorRes
 import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
-import androidx.appcompat.R as CompatR
 import androidx.core.content.ContextCompat
+import android.os.Build.VERSION_CODES.R as AndroidR
+import android.os.Build.VERSION_CODES.TIRAMISU as AndroidT
+import androidx.appcompat.R as CompatR
 
 
 val isCurveUnavailable = SDK_INT < AndroidR
@@ -37,16 +42,22 @@ val isCurveWork = SDK_INT >= AndroidT
 var forceLegacy = false
 val legacyMode get() = forceLegacy || isCurveUnavailable // !isCurveWork
 
+private class Unreachable : Exception()
+private val emptyIntArray = intArrayOf()
+
 
 data class StateType(
     val enabled: Boolean? = null,
     val checked: Boolean? = null,
     val activated: Boolean? = null,
     val selected: Boolean? = null,
+    val pressed: Boolean? = null,
+    val focused: Boolean? = null,
 ) {
     companion object {
         val Undefined = StateType()
     }
+    val isEmpty: Boolean = enabled == null && checked == null && activated == null && selected == null && pressed == null && focused == null
 }
 
 sealed interface ColorType {
@@ -56,18 +67,27 @@ sealed interface ColorType {
         fun transparent(state: StateType = StateType.Undefined) = Value(Color.TRANSPARENT, state)
         fun mask(state: StateType = StateType.Undefined) = Value(Color.BLACK, state)
     }
+
+    interface Stateful : ColorType {
+        val state: StateType
+    }
+
     data class Res(
         @ColorRes val colorId: Int,
-        val state: StateType = StateType.Undefined,
-    ) : ColorType
+        override val state: StateType = StateType.Undefined,
+    ) : Stateful
     data class Attr(
         @AttrRes val colorAttr: Int,
-        val state: StateType = StateType.Undefined,
-    ) : ColorType
+        override val state: StateType = StateType.Undefined,
+    ) : Stateful
     data class Value(
         @ColorInt val color: Int,
-        val state: StateType = StateType.Undefined,
-    ) : ColorType
+        override val state: StateType = StateType.Undefined,
+    ) : Stateful
+
+    data class Selector(val colors: List<Stateful>) : ColorType {
+        constructor(vararg colors: Stateful) : this(colors.toList())
+    }
 }
 
 sealed interface DimensionType {
@@ -284,7 +304,7 @@ fun Context.drawable(
     }
     val list = when (ripple) {
         null -> LayerDrawable(arrayOf())
-        else -> RippleDrawable(ColorStateList.valueOf(ripple.first), null, ripple.second)
+        else -> RippleDrawable(ripple.first, null, ripple.second)
     }
     layers.forEach {
         list.addLayer(resolve(it))
@@ -297,10 +317,41 @@ private fun Context.resolve(type: DimensionType): Float = when (type) {
     is DimensionType.Res -> resources.getDimension(type.dimenId)
 }
 
-private fun Context.resolve(type: ColorType): Int = when (type) {
-    is ColorType.Value -> type.color
-    is ColorType.Res -> ContextCompat.getColor(this, type.colorId)
-    is ColorType.Attr -> getColorByAttr(type.colorAttr)
+private fun Context.resolve(type: ColorType): ColorStateList =when (type) {
+    is ColorType.Value -> ColorStateList.valueOf(type.color)
+    is ColorType.Res -> ContextCompat.getColorStateList(this, type.colorId)!!
+    is ColorType.Attr -> getColorListByAttr(type.colorAttr)
+    is ColorType.Stateful -> throw Unreachable()
+    is ColorType.Selector -> resolve(type)
+}
+
+private fun Context.resolve(list: ColorType.Selector): ColorStateList {
+    val states = mutableListOf<IntArray>()
+    val colors = mutableListOf<Int>()
+    for (color in list.colors) {
+        colors.add(resolve(color))
+        states.add(color.state.attrs())
+    }
+    return ColorStateList(states.toTypedArray(), colors.toIntArray())
+}
+
+private fun StateType.attrs(): IntArray {
+    if (isEmpty) return emptyIntArray
+    return buildList {
+        enabled?.let { add(android.R.attr.state_enabled * if (it) 1 else -1) }
+        checked?.let { add(android.R.attr.state_checked * if (it) 1 else -1) }
+        activated?.let { add(android.R.attr.state_activated * if (it) 1 else -1) }
+        selected?.let { add(android.R.attr.state_selected * if (it) 1 else -1) }
+        pressed?.let { add(android.R.attr.state_pressed * if (it) 1 else -1) }
+        focused?.let { add(android.R.attr.state_focused * if (it) 1 else -1) }
+    }.toIntArray()
+}
+
+private fun Context.resolve(color: ColorType.Stateful): Int = when (color) {
+    is ColorType.Value -> color.color
+    is ColorType.Res -> ContextCompat.getColor(this, color.colorId)
+    is ColorType.Attr -> findResIdByAttr(color.colorAttr)
+    else -> throw Unreachable()
 }
 
 private fun Context.resolve(type: DrawableType): Drawable = when (type) {
@@ -310,6 +361,8 @@ private fun Context.resolve(type: DrawableType): Drawable = when (type) {
 }
 
 fun Context.getColorByAttr(@AttrRes attr: Int): Int = ContextCompat.getColor(this, findResIdByAttr(attr))
+
+fun Context.getColorListByAttr(@AttrRes attr: Int): ColorStateList = ContextCompat.getColorStateList(this, findResIdByAttr(attr))!!
 
 fun Context.findResIdByAttr(@AttrRes attr: Int): Int = findResIdsByAttr(attr)[0]
 
@@ -386,24 +439,30 @@ fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
 
 class RoundedDrawable private constructor(
     private val type: ShapeValueType,
+    private val colorList: ColorStateList,
     private val paint: Paint,
 ) : Drawable() {
     companion object {
         operator fun invoke(context: Context, color: ColorType, style: ShapeStyle, type: ShapeType): RoundedDrawable {
             val paint = Paint()
             paint.isAntiAlias = true
-            paint.color = context.resolve(color)
+            val colorList = context.resolve(color)
+            paint.color = colorList.defaultColor
             paint.style = style.paintStyle
             // clip the line in the middle during drawing
             paint.strokeWidth = context.resolve(style.strokeWidth) * 2
-            return RoundedDrawable(context.resolve(type), paint)
+            return RoundedDrawable(context.resolve(type), colorList, paint)
         }
     }
 
     private val path = Path()
     private val rect = RectF()
+    private var colorFilter: ColorFilter? = null
 
-    private var rectRadiusBorderless = 0f
+    private var tintList: ColorStateList? = null
+    private var tintFilter: ColorFilter? = null
+    private var tintMode: PorterDuff.Mode? = if (SDK_INT < Q) PorterDuff.Mode.SRC_IN else null
+    private var tintBlendMode: BlendMode? = if (SDK_INT >= Q) BlendMode.SRC_IN else null
 
     override fun getOutline(outline: Outline) = when {
         legacyMode -> when (type) {
@@ -432,28 +491,66 @@ class RoundedDrawable private constructor(
 
     override fun draw(canvas: Canvas) {
         when {
-            paint.color == 0 -> Unit
-            !legacyMode -> {
-                canvas.clipPath(path)
-                canvas.drawPath(path, paint)
-            }
-            else -> when (type) {
-                is ShapeValueType.Rect -> canvas.drawRoundRect(rect, type.topLeft, type.topLeft, paint)
-                is ShapeValueType.Circle -> canvas.drawCircle(rect.centerX(), rect.centerY(), type.radius, paint)
-            }
+            paint.color == 0 -> return
+            paint.alpha < 0f -> return
+            !isVisible -> return
+        }
+        if (!legacyMode) {
+            canvas.clipPath(path)
+            canvas.drawPath(path, paint)
+        } else when (type) {
+            is ShapeValueType.Rect -> canvas.drawRoundRect(rect, type.topLeft, type.topLeft, paint)
+            is ShapeValueType.Circle -> canvas.drawCircle(rect.centerX(), rect.centerY(), type.radius, paint)
         }
     }
 
     override fun setAlpha(alpha: Int) = paint.setAlpha(alpha)
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        paint.colorFilter = colorFilter
+        this.colorFilter = colorFilter
     }
+
+    override fun getColorFilter(): ColorFilter? = colorFilter
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
+    override fun isStateful(): Boolean = true
+
+    override fun onStateChange(state: IntArray): Boolean {
+        paint.color = colorList.getColorForState(state, colorList.defaultColor)
+        updateTint()
+        return true
+    }
+
+    override fun setTintList(tint: ColorStateList?) {
+        tintList = tint
+        updateTint()
+    }
+
+    override fun setTintMode(tintMode: PorterDuff.Mode?) {
+        this.tintMode = tintMode
+        tintBlendMode = null
+        updateTint()
+    }
+
+    override fun setTintBlendMode(blendMode: BlendMode?) {
+        this.tintMode = null
+        tintBlendMode = blendMode
+        updateTint()
+    }
+
     fun getOutlineProvider() = (this as Drawable).getOutlineProvider()
+
+    @SuppressLint("NewApi")
+    private fun updateTint() {
+        tintFilter = tintList
+            ?.run { getColorForState(state, defaultColor) }
+            ?.let { color ->
+                tintBlendMode?.let { BlendModeColorFilter(color, it) }
+                    ?: tintMode?.let { PorterDuffColorFilter(color, it) }
+            }
+    }
 }
 
 sealed interface ShapeValueType {

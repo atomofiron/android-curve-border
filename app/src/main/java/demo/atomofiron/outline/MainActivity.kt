@@ -1,8 +1,6 @@
 package demo.atomofiron.outline
 
-import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.drawable.RippleDrawable
 import android.os.Build.VERSION.SDK_INT
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -46,6 +44,7 @@ class MainActivity : AppCompatActivity() {
         clipCanvas.isChecked = isCurveUnavailable
         clipCanvas.isEnabled = !isCurveWork
         update()
+        frame.setOnClickListener { }
         legacy.setOnCheckedChangeListener { _, _ -> update() }
         clipCanvas.setOnCheckedChangeListener { _, _ -> update() }
     }
@@ -59,11 +58,17 @@ class MainActivity : AppCompatActivity() {
         val borderRadius = strokeRadius - strokeWidth - space
         val borderWidth = 1.dp
 
-        val color = when (resources.getBoolean(R.bool.day)) {
+        val defaultColor = when (resources.getBoolean(R.bool.day)) {
             true -> Color.parseColor("#ff008800")
             false -> Color.parseColor("#ff00aa00")
-        }
-        val stroke = RoundedDrawable(this@MainActivity, ColorType.Value(color), ShapeStyle.Stroke(strokeWidth), ShapeType.Rect(strokeRadius))
+        }.let { ColorType.Value(it) }
+        val pressedColor = ColorType.Value(Color.MAGENTA, StateType(pressed = true))
+        val stroke = RoundedDrawable(
+            this@MainActivity,
+            ColorType.Selector(pressedColor, defaultColor),
+            ShapeStyle.Stroke(strokeWidth),
+            ShapeType.Rect(strokeRadius),
+        )
         frame.clipToOutline = true
         //frame.background = stroke
         frame.foreground = stroke
