@@ -595,7 +595,7 @@ private val corners = arrayOf(
 
 fun Path.createRoundedCorners(bounds: RectF, radius: Float) {
     reset()
-    appendRoundedCorners(bounds, radius)
+    addCurvedRect(bounds, radius)
     close()
 }
 
@@ -605,11 +605,14 @@ fun Path.createCircle(bounds: RectF, radius: Float) {
     close()
 }
 
-fun Path.appendRoundedCorners(bounds: RectF, radius: Float) {
+fun Path.addCurvedRect(bounds: RectF, radius: Float) {
     val offset = radius * RADIUS_MULTIPLIER
     val straightX = bounds.width() - offset * 2
     val straightY = bounds.height() - offset * 2
-    // todo check bound limits
+    if (straightX < 0 || straightY < 0) {
+        // fallback
+        return addRoundRect(bounds, radius, radius, Path.Direction.CW)
+    }
     moveTo(bounds.left, bounds.top + offset)
     corners.forEach {
         rCubicTo(offset * it.dx1, offset * it.dy1, offset * it.dx2, offset * it.dy2, offset * it.dx, offset * it.dy)
