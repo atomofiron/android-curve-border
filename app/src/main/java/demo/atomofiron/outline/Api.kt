@@ -1,19 +1,13 @@
 package demo.atomofiron.outline
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Outline
 import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build.VERSION_CODES.TIRAMISU
-import android.view.View
-import android.view.ViewOutlineProvider
 import androidx.annotation.AttrRes
 import androidx.annotation.ColorInt
 import androidx.annotation.ColorRes
@@ -231,48 +225,6 @@ sealed interface DrawableType {
     ) : DrawableType
 }
 
-fun View.setBackground(
-    rippleColor: ColorType? = null,
-    clippingShape: ShapeType? = null,
-    clipToOutline: Boolean = clippingShape != null,
-    vararg layers: DrawableType = emptyArray(),
-) {
-    background = context.drawable(rippleColor, clippingShape, layers = layers)
-    if (clipToOutline) {
-        clipByBackground()
-    }
-}
-
-fun View.setForeground(
-    rippleColor: ColorType? = null,
-    clippingShape: ShapeType? = null,
-    clipToOutline: Boolean = clippingShape != null,
-    vararg layers: DrawableType = emptyArray(),
-) {
-    foreground = context.drawable(rippleColor, clippingShape, layers = layers)
-    if (clipToOutline) {
-        clipByForeground()
-    }
-}
-
-fun View.clipByBackground() {
-    outlineProvider = object : ViewOutlineProvider() {
-        override fun getOutline(view: View, outline: Outline) {
-            background?.getOutline(outline)
-        }
-    }
-    clipToOutline = true
-}
-
-fun View.clipByForeground() {
-    outlineProvider = object : ViewOutlineProvider() {
-        override fun getOutline(view: View, outline: Outline) {
-            foreground?.getOutline(outline)
-        }
-    }
-    clipToOutline = true
-}
-
 fun Context.drawable(
     rippleColor: ColorType? = null,
     rippleShape: ShapeType? = null,
@@ -344,44 +296,7 @@ private fun Context.resolve(type: DrawableType): Drawable = when (type) {
     is DrawableType.Colored -> RoundedDrawable(this, type.color, type.style, type.shape)
 }
 
-fun Context.getColorByAttr(@AttrRes attr: Int): Int = ContextCompat.getColor(this, findResIdByAttr(attr))
-
-fun Context.getColorListByAttr(@AttrRes attr: Int): ColorStateList = ContextCompat.getColorStateList(this, findResIdByAttr(attr))!!
-
-fun Context.findResIdByAttr(@AttrRes attr: Int): Int = findResIdsByAttr(attr)[0]
-
-fun Context.findResIdsByAttr(@AttrRes vararg attrs: Int): IntArray {
-    @SuppressLint("ResourceType")
-    val array = obtainStyledAttributes(attrs)
-
-    val values = IntArray(attrs.size)
-    for (i in attrs.indices) {
-        values[i] = array.getResourceId(i, 0)
-    }
-    array.recycle()
-
-    return values
-}
-
-fun <V : View> V.setRoundedBorder(
-    borderColor: Int,
-    cornerRadius: Float,
-    borderWidth: Float = resources.displayMetrics.density,
-): V {
-    val drawable = RoundedDrawable(context, ColorType.Value(borderColor), ShapeStyle.Stroke(borderWidth), ShapeType.Rect(cornerRadius))
-    foreground = drawable
-    outlineProvider = drawable.outlineProvider
-    clipToOutline = true
-    return this
-}
-
-fun <V : View> V.clip(cornerRadius: Float): V {
-    clipToOutline = true
-    outlineProvider = CurveDelegate(cornerRadius, this::invalidateOutline)
-    return this
-}
-
-fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
+internal fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
     is ShapeType.Circle -> ShapeValueType.Circle(resolve(type.radius))
     is ShapeType.Rect -> when (type.param) {
         is RadiusType.Single -> ShapeValueType.Rect(resolve(type.param.value))
@@ -425,72 +340,4 @@ sealed class ShapeValueType(
 
         constructor(radius: Float) : this(radius, radius, radius, radius)
     }
-}
-
-fun Path.createCurvedCorners(bounds: RectF, radius: Float) = createCurvedCorners(bounds, radius, radius, radius, radius)
-
-fun Path.createCurvedCorners(bounds: RectF, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
-    reset()
-    addCurvedRect(bounds, topLeft, topRight, bottomRight, bottomLeft)
-    close()
-}
-
-fun Path.createCircle(bounds: RectF, radius: Float) {
-    reset()
-    if (radius > 0f) {
-        addCircle(bounds.left + bounds.width() / 2, bounds.top + bounds.height() / 2, radius, Path.Direction.CW)
-    }
-    close()
-}
-
-private const val RADIUS_TO_OFFSET = 1.2f
-private const val ZERO = 0f
-private const val FULL = 1f
-private const val LONG_PART = 0.67f
-private const val SHORT_PART = FULL - LONG_PART
-
-/**  short   long    part
- *  v-----v--------v
- *        o--------o---
- *         .  ' |  |
- *  o   / visual|  |
- *  | .   radius|  | cubic offset Y
- *  |.----------o  |
- *  o--------------o visual radius * 1.2
- *  | cubic offset X
- */
-fun Path.addCurvedRect(bounds: RectF, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
-    val width = bounds.width()
-    val height = bounds.height()
-    val tl = max(0f, topLeft) * RADIUS_TO_OFFSET
-    val tr = max(0f, topRight) * RADIUS_TO_OFFSET
-    val br = max(0f, bottomRight) * RADIUS_TO_OFFSET
-    val bl = max(0f, bottomLeft) * RADIUS_TO_OFFSET
-    val lSum = bl + tl
-    val tSum = tl + tr
-    val rSum = tr + br
-    val bSum = br + bl
-    // top left radius Y
-    val tlry = if (lSum <= height) tl else height / lSum * tl
-    // top left radius X
-    val tlrx = if (tSum <= width) tl else width / tSum * tl
-    val trrx = if (tSum <= width) tr else width / tSum * tr
-    val trry = if (rSum <= height) tr else height / rSum * tr
-    val brry = if (rSum <= height) br else height / rSum * br
-    val brrx = if (bSum <= width) br else width / bSum * br
-    val blrx = if (bSum <= width) bl else width / bSum * bl
-    val blry = if (lSum <= height) bl else height / lSum * bl
-    moveTo(bounds.left, bounds.top + tlry)
-    // top left corner
-    if (topLeft > 0f) rCubicTo(ZERO, tlry * -LONG_PART, tlrx * SHORT_PART, tlry * -FULL, tlrx * FULL, tlry * -FULL)
-    rLineTo(width - tlrx - trrx, ZERO)
-    // top right corner
-    if (topRight > 0f) rCubicTo(trrx * LONG_PART, ZERO, trrx * FULL, trry * SHORT_PART, trrx * FULL, trry * FULL)
-    rLineTo(ZERO, height - trry - brry)
-    // bottom right corner
-    if (bottomRight > 0f) rCubicTo(ZERO, brry * LONG_PART, brrx * -SHORT_PART, brry * FULL, brrx * -FULL, brry * FULL)
-    rLineTo(-(width - brrx - blrx), ZERO)
-    // bottom left corner
-    if (bottomLeft > 0f) rCubicTo(blrx * -LONG_PART, ZERO, blrx * -FULL, blry * -SHORT_PART, blrx * -FULL, blry * -FULL)
-    rLineTo(ZERO, -(height - blry - tlry))
 }
