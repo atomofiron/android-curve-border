@@ -1,19 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Outline" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
-
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:fitsSystemWindows">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:navigationBarDividerColor" tools:targetApi="o_mr1">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/day</item>
+        <item name="android:windowLightStatusBar">@bool/day</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">@bool/day</item>
         <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
         <item name="android:windowSplashScreenBehavior" tools:targetApi="33">icon_preferred</item>
     </style>
-
-    <style name="Theme.Outline" parent="Base.Theme.Outline" />
 </resources>
