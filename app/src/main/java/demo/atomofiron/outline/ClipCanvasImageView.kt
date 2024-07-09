@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.util.AttributeSet
 import androidx.appcompat.widget.AppCompatImageView
+import demo.atomofiron.outline.impl.CurveDelegate
 
 class ClipCanvasImageView : AppCompatImageView {
 

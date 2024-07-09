@@ -10,6 +10,15 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat.Type
 import androidx.core.view.updatePadding
 import demo.atomofiron.outline.databinding.ActivityMainBinding
+import demo.atomofiron.outline.impl.ColorType
+import demo.atomofiron.outline.impl.CurveDelegate
+import demo.atomofiron.outline.impl.RoundedDrawable
+import demo.atomofiron.outline.impl.ShapeStyle
+import demo.atomofiron.outline.impl.ShapeType
+import demo.atomofiron.outline.impl.StateType
+import demo.atomofiron.outline.impl.isCurveUnavailable
+import demo.atomofiron.outline.impl.isCurvedOutlineWork
+import demo.atomofiron.outline.impl.setRoundedBorder
 
 class MainActivity : AppCompatActivity() {
 

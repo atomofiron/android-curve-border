@@ -1,4 +1,4 @@
-package demo.atomofiron.outline
+package demo.atomofiron.outline.impl
 
 import android.content.Context
 import android.graphics.Canvas

@@ -1,4 +1,4 @@
-package demo.atomofiron.outline
+package demo.atomofiron.outline.impl
 
 import android.content.Context
 import android.content.res.ColorStateList
@@ -95,22 +95,46 @@ sealed interface RadiusType {
         operator fun invoke(@DimenRes dimenId: Int) = Single(dimenId)
 
         @RequiresApi(TIRAMISU)
-        fun left(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(radius))
+        fun left(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun top(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(radius))
+        fun top(radius: Float) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun right(radius: Float) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun right(radius: Float) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun bottom(radius: Float) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun bottom(radius: Float) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(
+            radius
+        )
+        )
 
         @RequiresApi(TIRAMISU)
-        fun left(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(radius))
+        fun left(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), bottomLeft = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun top(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(radius))
+        fun top(@DimenRes radius: Int) = Radii.Zero.copy(topLeft = DimensionType.Value(radius), topRight = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun right(@DimenRes radius: Int) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun right(@DimenRes radius: Int) = Radii.Zero.copy(topRight = DimensionType.Value(radius), bottomRight = DimensionType.Value(
+            radius
+        )
+        )
         @RequiresApi(TIRAMISU)
-        fun bottom(@DimenRes radius: Int) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(radius))
+        fun bottom(@DimenRes radius: Int) = Radii.Zero.copy(bottomLeft = DimensionType.Value(radius), bottomRight = DimensionType.Value(
+            radius
+        )
+        )
     }
 
     data class Single(val value: DimensionType) : RadiusType {
@@ -140,14 +164,24 @@ sealed interface RadiusType {
             topRight: Float,
             bottomRight: Float,
             bottomLeft: Float,
-        ) : this(DimensionType.Value(topLeft), DimensionType.Value(topRight), DimensionType.Value(bottomRight), DimensionType.Value(bottomLeft))
+        ) : this(
+            DimensionType.Value(topLeft),
+            DimensionType.Value(topRight),
+            DimensionType.Value(bottomRight),
+            DimensionType.Value(bottomLeft)
+        )
 
         constructor(
             @DimenRes topLeft: Int,
             @DimenRes topRight: Int,
             @DimenRes bottomRight: Int,
             @DimenRes bottomLeft: Int,
-        ) : this(DimensionType.Res(topLeft), DimensionType.Res(topRight), DimensionType.Res(bottomRight), DimensionType.Res(bottomLeft))
+        ) : this(
+            DimensionType.Res(topLeft),
+            DimensionType.Res(topRight),
+            DimensionType.Res(bottomRight),
+            DimensionType.Res(bottomLeft)
+        )
     }
 }
 

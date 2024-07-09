@@ -1,4 +1,4 @@
-package demo.atomofiron.outline
+package demo.atomofiron.outline.impl
 
 import android.graphics.Path
 import android.graphics.RectF
