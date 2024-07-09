@@ -39,10 +39,10 @@ class MainActivity : AppCompatActivity() {
             recreate()
         }
         android.text = getString(R.string.android_version, SDK_INT)
-        legacy.isChecked = legacyMode
+        legacy.isChecked = CurveDelegate.legacyMode
         legacy.isEnabled = !isCurveUnavailable
-        clipCanvas.isChecked = isCurveUnavailable
-        clipCanvas.isEnabled = !isCurveWork
+        clipCanvas.isChecked = !isCurvedOutlineWork
+        clipCanvas.isEnabled = !isCurvedOutlineWork
         update()
         frame.setOnClickListener { }
         legacy.setOnCheckedChangeListener { _, _ -> update() }
@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun ActivityMainBinding.update() {
-        forceLegacy = legacy.isChecked
+        CurveDelegate.forceLegacy = legacy.isChecked
 
         val strokeRadius = 32.dp
         val strokeWidth = 2.dp
@@ -70,11 +70,10 @@ class MainActivity : AppCompatActivity() {
             ShapeType.Rect(strokeRadius),
         )
         frame.clipToOutline = true
-        //frame.background = stroke
         frame.foreground = stroke
-        frame.outlineProvider = stroke.getOutlineProvider()
+        frame.outlineProvider = stroke.outlineProvider
 
-        if (isCurveWork) {
+        if (isCurvedOutlineWork) {
         } else if (legacy.isChecked && clipCanvas.isEnabled) {
             clipCanvas.isEnabled = false
             clipCanvasWasChecked = clipCanvas.isChecked

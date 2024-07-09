@@ -7,7 +7,7 @@ import androidx.appcompat.widget.AppCompatImageView
 
 class ClipCanvasImageView : AppCompatImageView {
 
-    private val clipper = ClipCanvasDelegate(::invalidate)
+    private val delegate = CurveDelegate(::invalidate)
 
     constructor(context: Context) : super(context)
     constructor(context: Context, attrs: AttributeSet?) : super(context, attrs)
@@ -15,13 +15,13 @@ class ClipCanvasImageView : AppCompatImageView {
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        if (changed) clipper.setSize(right - left, bottom - top)
+        if (changed) delegate.setSize(right - left, bottom - top)
     }
 
     override fun draw(canvas: Canvas) {
-        clipper.onPreDraw(canvas)
+        delegate.clip(canvas)
         super.draw(canvas)
     }
 
-    fun setCornerRadius(value: Float) = clipper.setCornerRadius(value)
+    fun setCornerRadius(value: Float) = delegate.setCornerRadius(value)
 }

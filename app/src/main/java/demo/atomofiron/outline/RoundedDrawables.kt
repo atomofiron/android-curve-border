@@ -3,25 +3,14 @@ package demo.atomofiron.outline
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.BlendMode
-import android.graphics.BlendModeColorFilter
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.ColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
-import android.graphics.Paint.Style
 import android.graphics.Path
-import android.graphics.PixelFormat
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
-import android.os.Build
-import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.Q
 import android.os.Build.VERSION_CODES.TIRAMISU
 import android.view.View
 import android.view.ViewOutlineProvider
@@ -32,15 +21,10 @@ import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
-import android.os.Build.VERSION_CODES.R as AndroidR
-import android.os.Build.VERSION_CODES.TIRAMISU as AndroidT
+import kotlin.math.max
 import androidx.appcompat.R as CompatR
 
 
-val isCurveUnavailable = SDK_INT < AndroidR
-val isCurveWork = SDK_INT >= AndroidT
-var forceLegacy = false
-val legacyMode get() = forceLegacy || isCurveUnavailable // !isCurveWork
 
 private class Unreachable : Exception()
 private val emptyIntArray = intArrayOf()
@@ -101,11 +85,11 @@ sealed interface DimensionType {
 }
 
 sealed class ShapeStyle(
-    val paintStyle: Style,
+    val paintStyle: Paint.Style,
     val strokeWidth: DimensionType,
 ) {
-    data object Fill : ShapeStyle(Style.FILL, strokeWidth = DimensionType.Zero)
-    data class Stroke(val width: DimensionType) : ShapeStyle(Style.STROKE, width) {
+    data object Fill : ShapeStyle(Paint.Style.FILL, strokeWidth = DimensionType.Zero)
+    data class Stroke(val width: DimensionType) : ShapeStyle(Paint.Style.STROKE, width) {
         constructor(@DimenRes width: Int) : this(DimensionType.Res(width))
         constructor(width: Float = 1f) : this(DimensionType.Value(width))
     }
@@ -312,12 +296,12 @@ fun Context.drawable(
     return list
 }
 
-private fun Context.resolve(type: DimensionType): Float = when (type) {
+internal fun Context.resolve(type: DimensionType): Float = when (type) {
     is DimensionType.Value -> type.value
     is DimensionType.Res -> resources.getDimension(type.dimenId)
 }
 
-private fun Context.resolve(type: ColorType): ColorStateList =when (type) {
+internal fun Context.resolve(type: ColorType): ColorStateList =when (type) {
     is ColorType.Value -> ColorStateList.valueOf(type.color)
     is ColorType.Res -> ContextCompat.getColorStateList(this, type.colorId)!!
     is ColorType.Attr -> getColorListByAttr(type.colorAttr)
@@ -386,42 +370,15 @@ fun <V : View> V.setRoundedBorder(
 ): V {
     val drawable = RoundedDrawable(context, ColorType.Value(borderColor), ShapeStyle.Stroke(borderWidth), ShapeType.Rect(cornerRadius))
     foreground = drawable
-    outlineProvider = drawable.getOutlineProvider()
+    outlineProvider = drawable.outlineProvider
     clipToOutline = true
     return this
 }
 
 fun <V : View> V.clip(cornerRadius: Float): V {
     clipToOutline = true
-    outlineProvider = when {
-        legacyMode -> RoundRectOutlineProvider(cornerRadius)
-        else -> CubicCornersOutlineProvider(cornerRadius)
-    }
+    outlineProvider = CurveDelegate(cornerRadius, this::invalidateOutline)
     return this
-}
-
-private fun Drawable.getOutlineProvider() = object : ViewOutlineProvider() {
-    override fun getOutline(view: View, outline: Outline) {
-        setBounds(0, 0, view.width, view.height)
-        getOutline(outline)
-    }
-}
-
-private class RoundRectOutlineProvider(private val radius: Float) : ViewOutlineProvider() {
-    override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, radius)
-}
-
-@RequiresApi(Build.VERSION_CODES.R)
-private class CubicCornersOutlineProvider(private val radius: Float) : ViewOutlineProvider() {
-    private val path = Path()
-    private val rect = RectF()
-
-    override fun getOutline(view: View, outline: Outline) {
-        rect.right = view.width.toFloat()
-        rect.bottom = view.height.toFloat()
-        path.createRoundedCorners(rect, radius)
-        outline.setPath(path)
-    }
 }
 
 fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
@@ -437,199 +394,103 @@ fun Context.resolve(type: ShapeType): ShapeValueType = when (type) {
     }
 }
 
-class RoundedDrawable private constructor(
-    private val type: ShapeValueType,
-    private val colorList: ColorStateList,
-    private val paint: Paint,
-) : Drawable() {
-    companion object {
-        operator fun invoke(context: Context, color: ColorType, style: ShapeStyle, type: ShapeType): RoundedDrawable {
-            val paint = Paint()
-            paint.isAntiAlias = true
-            val colorList = context.resolve(color)
-            paint.color = colorList.defaultColor
-            paint.style = style.paintStyle
-            // clip the line in the middle during drawing
-            paint.strokeWidth = context.resolve(style.strokeWidth) * 2
-            return RoundedDrawable(context.resolve(type), colorList, paint)
-        }
+sealed class ShapeValueType(
+    internal val topLeft: Float,
+    internal val topRight: Float,
+    internal val bottomRight: Float,
+    internal val bottomLeft: Float,
+) {
+    val isZero = topLeft <= 0f && topRight <= 0f && bottomRight <= 0f && bottomLeft <= 0f
+
+    data class Circle(private val radiusValue: Float) : ShapeValueType(
+        max(0f, radiusValue),
+        max(0f, radiusValue),
+        max(0f, radiusValue),
+        max(0f, radiusValue),
+    ) {
+        val radius = max(0f, radiusValue)
     }
-
-    private val path = Path()
-    private val rect = RectF()
-    private var colorFilter: ColorFilter? = null
-
-    private var tintList: ColorStateList? = null
-    private var tintFilter: ColorFilter? = null
-    private var tintMode: PorterDuff.Mode? = if (SDK_INT < Q) PorterDuff.Mode.SRC_IN else null
-    private var tintBlendMode: BlendMode? = if (SDK_INT >= Q) BlendMode.SRC_IN else null
-
-    override fun getOutline(outline: Outline) = when {
-        legacyMode -> when (type) {
-            is ShapeValueType.Rect -> outline.setRoundRect(bounds, type.topLeft)
-            is ShapeValueType.Circle -> {
-                val radius = type.radius.toInt()
-                val left = bounds.centerX() - radius
-                val top = bounds.centerY() - radius
-                outline.setOval(left, top, left + radius * 2, top + radius * 2)
-            }
-        }
-        else -> outline.setPath(path)
-    }
-
-    override fun setBounds(left: Int, top: Int, right: Int, bottom: Int) {
-        val updatePath = bounds.left != left || bounds.top != top || bounds.right != right || bounds.bottom != bottom
-        super.setBounds(left, top, right, bottom)
-        if (updatePath) {
-            rect.set(bounds)
-            when (type) {
-                is ShapeValueType.Rect -> path.createRoundedCorners(rect, type.topLeft)
-                is ShapeValueType.Circle -> path.createCircle(rect, type.radius)
-            }
-        }
-    }
-
-    override fun draw(canvas: Canvas) {
-        when {
-            paint.color == 0 -> return
-            paint.alpha < 0f -> return
-            !isVisible -> return
-        }
-        if (!legacyMode) {
-            canvas.clipPath(path)
-            canvas.drawPath(path, paint)
-        } else when (type) {
-            is ShapeValueType.Rect -> canvas.drawRoundRect(rect, type.topLeft, type.topLeft, paint)
-            is ShapeValueType.Circle -> canvas.drawCircle(rect.centerX(), rect.centerY(), type.radius, paint)
-        }
-    }
-
-    override fun setAlpha(alpha: Int) = paint.setAlpha(alpha)
-
-    override fun setColorFilter(colorFilter: ColorFilter?) {
-        this.colorFilter = colorFilter
-    }
-
-    override fun getColorFilter(): ColorFilter? = colorFilter
-
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-    override fun isStateful(): Boolean = true
-
-    override fun onStateChange(state: IntArray): Boolean {
-        paint.color = colorList.getColorForState(state, colorList.defaultColor)
-        updateTint()
-        return true
-    }
-
-    override fun setTintList(tint: ColorStateList?) {
-        tintList = tint
-        updateTint()
-    }
-
-    override fun setTintMode(tintMode: PorterDuff.Mode?) {
-        this.tintMode = tintMode
-        tintBlendMode = null
-        updateTint()
-    }
-
-    override fun setTintBlendMode(blendMode: BlendMode?) {
-        this.tintMode = null
-        tintBlendMode = blendMode
-        updateTint()
-    }
-
-    fun getOutlineProvider() = (this as Drawable).getOutlineProvider()
-
-    @SuppressLint("NewApi")
-    private fun updateTint() {
-        tintFilter = tintList
-            ?.run { getColorForState(state, defaultColor) }
-            ?.let { color ->
-                tintBlendMode?.let { BlendModeColorFilter(color, it) }
-                    ?: tintMode?.let { PorterDuffColorFilter(color, it) }
-            }
-    }
-}
-
-sealed interface ShapeValueType {
-    data class Circle(val radius: Float) : ShapeValueType
     data class Rect(
-        val topLeft: Float,
-        val topRight: Float,
-        val bottomRight: Float,
-        val bottomLeft: Float,
-    ) : ShapeValueType {
+        val topLeftRadius: Float,
+        val topRightRadius: Float,
+        val bottomRightRadius: Float,
+        val bottomLeftRadius: Float,
+    ) : ShapeValueType(
+        topLeft = max(0f, topLeftRadius),
+        topRight = max(0f, topRightRadius),
+        bottomRight = max(0f, bottomRightRadius),
+        bottomLeft = max(0f, bottomLeftRadius),
+    ) {
+        val allTheSame = topLeft == topRight && topRight == bottomRight && bottomRight == bottomLeft
+
         constructor(radius: Float) : this(radius, radius, radius, radius)
     }
 }
 
+fun Path.createCurvedCorners(bounds: RectF, radius: Float) = createCurvedCorners(bounds, radius, radius, radius, radius)
 
-
-private const val RADIUS_MULTIPLIER = 1.2f
-private const val ZERO = 0f
-private const val FULL = 1f
-private const val LONG_PART = 0.67f
-private const val SHORT_PART = FULL - LONG_PART
-
-private class Corner(
-    val dx1: Float,
-    val dy1: Float,
-    val dx2: Float,
-    val dy2: Float,
-    val dx: Float,
-    val dy: Float,
-    // to the next corner
-    val lineX: Int,
-    val lineY: Int,
-)
-
-// the starting point is at the bottom of the top left corner
-private val corners = arrayOf(
-    Corner(ZERO, -LONG_PART, SHORT_PART, -FULL, FULL, -FULL, lineX = 1, lineY = 0),
-    Corner(LONG_PART, ZERO, FULL, SHORT_PART, FULL, FULL, lineX = 0, lineY = 1),
-    Corner(ZERO, LONG_PART, -SHORT_PART, FULL, -FULL, FULL, lineX = -1, lineY = 0),
-    Corner(-LONG_PART, ZERO, -FULL, -SHORT_PART, -FULL, -FULL, lineX = 0, lineY = -1),
-)
-
-fun Path.createRoundedCorners(bounds: RectF, radius: Float) {
+fun Path.createCurvedCorners(bounds: RectF, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
     reset()
-    addCurvedRect(bounds, radius)
+    addCurvedRect(bounds, topLeft, topRight, bottomRight, bottomLeft)
     close()
 }
 
 fun Path.createCircle(bounds: RectF, radius: Float) {
     reset()
-    addCircle(bounds.left + bounds.width() / 2, bounds.top + bounds.height() / 2, radius, Path.Direction.CW)
+    if (radius > 0f) {
+        addCircle(bounds.left + bounds.width() / 2, bounds.top + bounds.height() / 2, radius, Path.Direction.CW)
+    }
     close()
 }
 
-fun Path.addCurvedRect(bounds: RectF, radius: Float) {
-    val offset = radius * RADIUS_MULTIPLIER
-    val straightX = bounds.width() - offset * 2
-    val straightY = bounds.height() - offset * 2
-    if (straightX < 0 || straightY < 0) {
-        // fallback
-        return addRoundRect(bounds, radius, radius, Path.Direction.CW)
-    }
-    moveTo(bounds.left, bounds.top + offset)
-    corners.forEach {
-        rCubicTo(offset * it.dx1, offset * it.dy1, offset * it.dx2, offset * it.dy2, offset * it.dx, offset * it.dy)
-        rLineTo(straightX * it.lineX, straightY * it.lineY)
-    }
-}
+private const val RADIUS_TO_OFFSET = 1.2f
+private const val ZERO = 0f
+private const val FULL = 1f
+private const val LONG_PART = 0.67f
+private const val SHORT_PART = FULL - LONG_PART
 
-fun generateRoundedCornersPathData(bounds: RectF, radius: Float): String {
-    val offset = radius * RADIUS_MULTIPLIER
-    val straightX = bounds.width() - offset * 2
-    val straightY = bounds.height() - offset * 2
-    val builder = StringBuilder()
-    builder.append("M ${bounds.left} ${bounds.top + offset} ")
-    corners.forEach {
-        builder.append("c ${offset * it.dx1} ${offset * it.dy1} ${offset * it.dx2} ${offset * it.dy2} ${offset * it.dx} ${offset * it.dy} ")
-        builder.append("l ${straightX * it.lineX} ${straightY * it.lineY} ")
-    }
-    builder.append("z")
-    return builder.toString()
+/**  short   long    part
+ *  v-----v--------v
+ *        o--------o---
+ *         .  ' |  |
+ *  o   / visual|  |
+ *  | .   radius|  | cubic offset Y
+ *  |.----------o  |
+ *  o--------------o visual radius * 1.2
+ *  | cubic offset X
+ */
+fun Path.addCurvedRect(bounds: RectF, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
+    val width = bounds.width()
+    val height = bounds.height()
+    val tl = max(0f, topLeft) * RADIUS_TO_OFFSET
+    val tr = max(0f, topRight) * RADIUS_TO_OFFSET
+    val br = max(0f, bottomRight) * RADIUS_TO_OFFSET
+    val bl = max(0f, bottomLeft) * RADIUS_TO_OFFSET
+    val lSum = bl + tl
+    val tSum = tl + tr
+    val rSum = tr + br
+    val bSum = br + bl
+    // top left radius Y
+    val tlry = if (lSum <= height) tl else height / lSum * tl
+    // top left radius X
+    val tlrx = if (tSum <= width) tl else width / tSum * tl
+    val trrx = if (tSum <= width) tr else width / tSum * tr
+    val trry = if (rSum <= height) tr else height / rSum * tr
+    val brry = if (rSum <= height) br else height / rSum * br
+    val brrx = if (bSum <= width) br else width / bSum * br
+    val blrx = if (bSum <= width) bl else width / bSum * bl
+    val blry = if (lSum <= height) bl else height / lSum * bl
+    moveTo(bounds.left, bounds.top + tlry)
+    // top left corner
+    if (topLeft > 0f) rCubicTo(ZERO, tlry * -LONG_PART, tlrx * SHORT_PART, tlry * -FULL, tlrx * FULL, tlry * -FULL)
+    rLineTo(width - tlrx - trrx, ZERO)
+    // top right corner
+    if (topRight > 0f) rCubicTo(trrx * LONG_PART, ZERO, trrx * FULL, trry * SHORT_PART, trrx * FULL, trry * FULL)
+    rLineTo(ZERO, height - trry - brry)
+    // bottom right corner
+    if (bottomRight > 0f) rCubicTo(ZERO, brry * LONG_PART, brrx * -SHORT_PART, brry * FULL, brrx * -FULL, brry * FULL)
+    rLineTo(-(width - brrx - blrx), ZERO)
+    // bottom left corner
+    if (bottomLeft > 0f) rCubicTo(blrx * -LONG_PART, ZERO, blrx * -FULL, blry * -SHORT_PART, blrx * -FULL, blry * -FULL)
+    rLineTo(ZERO, -(height - blry - tlry))
 }
